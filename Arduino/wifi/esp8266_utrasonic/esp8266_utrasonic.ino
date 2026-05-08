@@ -1,0 +1,130 @@
+#include <Arduino.h>
+#include <ESP8266WiFi.h>
+#include <ESPAsyncTCP.h>
+#include <ESPAsyncWebServer.h>
+#include <Adafruit_Sensor.h>
+#include <Servo.h>
+
+const char* ssid = "401GD";
+const char* password = "@hoaK181211";
+
+#define TRIG_PIN 12
+#define ECHO_PIN 14
+#define TIME_OUT 5000
+
+long distance = 0;
+
+AsyncWebServer server(80);
+
+const char index_html[] PROGMEM = R"rawliteral(
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=, initial-scale=1.0" />
+    <title>Document</title>
+
+    <style>
+      html {
+        font-family: Arial;
+        display: inline-block;
+        margin: 0px auto;
+        text-align: center;
+      }
+      h2 {
+        font-size: 3rem;
+      }
+      .hc04 {
+        font-size: 3rem;
+      }
+      .ultrasonic {
+        font-size: 3rem;
+        vertical-align: middle;
+        padding-bottom: 15px;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>ESP8266 take data from Ultrasonic</h2>
+
+    <p class="hc04">
+      <i class="fas fa-thermometer-half" style="color: #059e8a"></i>
+      <span class="ultrasonic">Distance : </span>
+      <span id="distance">%Distance%</span>
+    </p>
+  </body>
+
+   <script>
+
+    setInterval(function () {
+      var xhttp = new XMLHttpRequest();
+      xhttp.onreadystatechange = function () {
+        if (this.readyState == 4 && this.status == 200) {
+          document.getElementById("distance").innerHTML = this.responseText;
+        }
+      };
+      xhttp.open("GET", "/distance", true);
+      xhttp.send();
+    }, 1000);
+
+  </script>
+</html>
+)rawliteral";
+
+
+void setup() {  
+  Serial.begin(9600);
+  pinMode(TRIG_PIN, OUTPUT);
+  pinMode(ECHO_PIN, INPUT);
+
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(1000);
+    Serial.println("Connecting to WiFi...");
+  }
+
+  Serial.println("Connected to WiFi");
+  Serial.println("IP Address: ");
+  Serial.println(WiFi.localIP());
+
+  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
+    request->send_P(200, "text/html", index_html);
+  });
+
+  server.on("/distance", HTTP_GET, [](AsyncWebServerRequest *request) {
+    float distance = GetDistance();
+    request->send_P(200, "text/plain", String(distance).c_str());
+  });
+
+    server.begin();
+
+}
+
+float GetDistance() {
+  long duration, distanceCm;
+   
+  digitalWrite(TRIG_PIN, LOW);
+  delayMicroseconds(2);
+  digitalWrite(TRIG_PIN, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(TRIG_PIN, LOW);
+  
+  duration = pulseIn(ECHO_PIN, HIGH, TIME_OUT);
+  // convert to distance
+  distanceCm = duration / 29.1 / 2;
+  
+  return distanceCm;
+}
+
+void loop() {
+    long newDistance = GetDistance();
+    Serial.print("Distance to nearest obstacle (cm): ");
+    Serial.println(newDistance);
+
+      if (isnan(newDistance)) {
+    Serial.println("Failed to read from DHT sensor!");
+  } else {
+    distance = newDistance;
+    Serial.print("Distance: ");
+    Serial.println(distance);
+  }
+}
